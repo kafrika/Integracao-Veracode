@@ -1,4 +1,5 @@
-# Feito com base no NodeGoat 
+# Para testar, recomendo a utilização do projeto Verademo
+# Disponivel em: https://github.com/IGDEXE/Verademo
 
 trigger:
 - master
@@ -7,22 +8,20 @@ pool:
   vmImage: ubuntu-latest
 
 variables:
-  phpVersion: 7.2
   veracodeAppProfile: AzDevOps.$(Build.DefinitionName)
-##  caminhoPacote: $(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip
+##  caminhoPacote: target/verademo.war
 
 steps:
-- task: CmdLine@2
+- task: Maven@3
   inputs:
-    script: 'npm install'
-  displayName: 'NPM'
-- task: ArchiveFiles@2
-  inputs:
-    rootFolderOrFile: '$(Agent.BuildDirectory)'
-    includeRootFolder: true
-    archiveType: 'zip'
-    replaceExistingArchive: true
-  displayName: 'Criando pacote para analise'
+    mavenPomFile: 'pom.xml'
+    mavenOptions: '-Xmx3072m'
+    javaHomeOption: 'JDKVersion'
+    jdkVersionOption: '1.8'
+    jdkArchitectureOption: 'x64'
+    publishJUnitResults: true
+    testResultsFiles: '**/surefire-reports/TEST-*.xml'
+    goals: 'package'
 
 - script: |
     curl -O -L https://downloads.veracode.com/securityscan/pipeline-scan-LATEST.zip
@@ -52,6 +51,7 @@ steps:
     apiKey: '$(Veracode_Secret)'
     veracodeAppProfile: '$(veracodeAppProfile)'
     version: '$(build.buildNumber)'
+##  filepath: '$(caminhoPacote)'
     createSandBox: false
     createProfile: true
     failTheBuildIfVeracodeScanDidNotInitiate: false
@@ -59,3 +59,17 @@ steps:
     importResults: true
     failBuildOnPolicyFail: false
   displayName: 'Veracode SAST'
+
+- task: Veracode Flaw Importer@3
+  inputs:
+    ConnectionDetailsSelection: 'Credentials'
+    apiId: '$(Veracode_ID)'
+    apiKey: '$(Veracode_Secret)'
+    veracodeAppProfile: '$(veracodeAppProfile)'
+##  sandboxName: 
+    importType: 'All Flaws'
+    workItemType: 'Issue'
+    area: '$(system.teamProject)'
+    addCustomTag: '$(build.buildNumber)'
+    flawImportLimit: '1000'
+  displayName: 'Veracode importando falhas'
